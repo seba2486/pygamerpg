@@ -1,0 +1,5 @@
+# Archivos del entorno de desarrollo
+*.project
+*.pydevproject
+.setings/
+__pycache__/
