@@ -26,8 +26,7 @@ class Map:
         Args:
             filename (str): La ruta del archivo del spritesheet.
             tile_width (int): Ancho de cada tile en píxeles.
-            tile_height (int): Altura de cada tile en píxeles.
-        
+            tile_height (int): Altura de cada tile en píxeles. 
         Returns:
             list: Una lista de superficies Pygame para cada tile.
         """
