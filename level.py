@@ -4,7 +4,7 @@ from map import Map
 
 class Level:
     def __init__(self, csv_path=None, entities = None, winFunc=None, loseFunc=None, tile_image_path=None, 
-                 background = None, foreground = None, powerupSpawnPoints = None, movingPlatforms = None, trackingEnemies = None, boss = None, npc = None):
+                 background = None, foreground = None, powerupSpawnPoints = None, movingPlatforms = None, trackingEnemies = None, boss = None, npc = None, projectiles = None):
         self.map = Map(csv_path, globals.TILE_SIZE, tile_image_path, utils.platform_tile_indices)
         self.platforms = self.map.platforms
         self.entities = entities
@@ -17,6 +17,7 @@ class Level:
         self.trackingEnemies = trackingEnemies
         self.boss = boss
         self.npc = npc
+        self.projectiles = projectiles
 
     def isWon(self):
         if self.winFunc is None:
@@ -102,7 +103,8 @@ def loadLevel(levelNumber):
                 utils.makeTrackingEnemy(113*globals.TILE_SIZE, 20*globals.TILE_SIZE, 200, 'bat')
             ],
             boss = utils.makeBossEnemy(24*globals.TILE_SIZE, 4*globals.TILE_SIZE, 'boss'),
-            npc = utils.makeNpc(54*globals.TILE_SIZE, 15*globals.TILE_SIZE+5, 'smith')
+            npc = utils.makeNpc(54*globals.TILE_SIZE, 15*globals.TILE_SIZE+5, 'smith'),
+            projectiles = []
         )
     elif levelNumber == 2:
         globals.world = Level(

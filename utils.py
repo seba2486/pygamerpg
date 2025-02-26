@@ -36,6 +36,7 @@ def makeMovingPlatform(x, y, width, height, max_height, speed, type):
     movingPlatform.animations.add('moving', entityMovingAnimation)
     movingPlatform.state = 'moving'
     movingPlatform.type = type
+    movingPlatform.colide = True
     return movingPlatform
 
 tree0 = pygame.image.load('sprites/trees/tree1.png')
@@ -225,22 +226,22 @@ enemies_power = {'toad': 10,'devil': 10, 'bat': 10, 'boss' : 20, 'spike' : 20}
 enemies_types = ['toad', 'devil','bat', 'boss']
 enemies_size = {'toad':[20,20],'devil':[25,23], 'bat':[26,26], 'boss' : [60,72]}
 enemies_animations = {'toad' : {
-                                'iddle' : [toad0],
+                                'idle' : [toad0],
                                 'walking' : [toad0,toad1,toad2],
                                 'hit' : [toad3,toad4,toad3,toad4,toad3,toad4]
                                 },
                       'devil': {
-                                'iddle' : [devil0],
+                                'idle' : [devil0],
                                 'walking' : [devil0,devil1,devil2],
                                 'hit' : [devil3]
                                 },
                       'bat' : {
-                                'iddle' : [bat0],
+                                'idle' : [bat0],
                                 'walking' : [bat0,bat1,bat2],
                                 'hit' : [bat3,bat4,bat3,bat4,bat3,bat4]
                                 }, 
                       'boss' : {
-                                'iddle' : [boss0],
+                                'idle' : [boss0],
                                 'walking' : [boss0,boss1],
                                 'hit' : [boss2],
                                 'attack' : [boss3]
@@ -252,7 +253,7 @@ def makeEnemy(x, y, type):
     w = enemies_size[type][0]
     h = enemies_size[type][1]
     entity.position = engine.Position(x,y,w,h)
-    enemyIddleAnimation = engine.Animation(enemies_animations[type]['iddle'])
+    enemyIddleAnimation = engine.Animation(enemies_animations[type]['idle'])
     enemyWalkingAnimation = engine.Animation(enemies_animations[type]['walking'])
     enemyHitAnimation = engine.Animation(enemies_animations[type]['hit'])
     entity.animations.add('idle', enemyIddleAnimation)
@@ -266,6 +267,7 @@ def makeEnemy(x, y, type):
     entity.battle = engine.Battle(enemies_energy[type], enemies_energy[type])
     entity.impact_power = enemies_power[type]
     entity.cooldown = 50
+    entity.attack_cooldown = 0  # Inicialmente sin temporizador
     return entity
 
 def makeTrackingEnemy(x, y, tracking_d, type):
@@ -273,7 +275,7 @@ def makeTrackingEnemy(x, y, tracking_d, type):
     w = enemies_size[type][0]
     h = enemies_size[type][1]
     entity.position = engine.Position(x,y,w,h)
-    enemyIddleAnimation = engine.Animation(enemies_animations[type]['iddle'])
+    enemyIddleAnimation = engine.Animation(enemies_animations[type]['idle'])
     enemyWalkingAnimation = engine.Animation(enemies_animations[type]['walking'])
     enemyHitAnimation = engine.Animation(enemies_animations[type]['hit'])
     entity.animations.add('idle', enemyIddleAnimation)
@@ -298,7 +300,7 @@ def makeBossEnemy(x, y, type):
     w = enemies_size[type][0]
     h = enemies_size[type][1]
     entity.position = engine.Position(x,y,w,h)
-    enemyIddleAnimation = engine.Animation(enemies_animations[type]['iddle'])
+    enemyIddleAnimation = engine.Animation(enemies_animations[type]['idle'])
     enemyWalkingAnimation = engine.Animation(enemies_animations[type]['walking'])
     enemyHitAnimation = engine.Animation(enemies_animations[type]['hit'])
     enemyAttackAnimation = engine.Animation(enemies_animations[type]['attack'])
@@ -451,6 +453,9 @@ def makePlayer(x, y):
     entity.impact_power = 10
     entity.shield = False
     entity.armor = False
+    # Atributos para el disparo
+    entity.last_shot_time = 0           # Tiempo del último disparo (inicialmente 0)
+    entity.shoot_cooldown = 500         # 500 ms de cooldown entre disparos    
     return entity
 
 pygame.font.init()
@@ -551,7 +556,7 @@ smith1 = pygame.image.load('sprites/npcs/smith_sign.png')
 npcs_types = ['smith']
 npcs_size = {'smith':[30,60]}
 npcs_animations = {'smith' : {
-                                'iddle' : [smith0],
+                                'idle' : [smith0],
                                 'sign' : [smith1]
                                 },
 }
@@ -561,7 +566,7 @@ def makeNpc(x, y, type):
     w = npcs_size[type][0]
     h = npcs_size[type][1]
     entity.position = engine.Position(x,y,w,h)
-    npcIddleAnimation = engine.Animation(npcs_animations[type]['iddle'])
+    npcIddleAnimation = engine.Animation(npcs_animations[type]['idle'])
     npcSignAnimation = engine.Animation(npcs_animations[type]['sign'])
     entity.animations.add('idle', npcIddleAnimation)
     entity.animations.add('sign', npcSignAnimation)
@@ -603,3 +608,11 @@ def makeShopItem(place, type):
     item.image = shop_items_images[type]
     item.price = shop_items_prices[type]
     return item
+
+def makeProjectile(x, y, direction, speed, damage, lifetime=60, owner=None):
+    # Supongamos que el tamaño del proyectil es de 8x8 píxeles.
+    image = pygame.image.load('sprites/projectiles/projectile.png')
+    projectile = engine.Projectile(x, y, 20, 20, direction, speed, damage, lifetime, image, owner)
+    # Si tienes animaciones específicas para proyectiles, las puedes agregar aquí:
+    # projectile.animations.add('idle', Animation([tu_imagen_del_proyectil]))
+    return projectile

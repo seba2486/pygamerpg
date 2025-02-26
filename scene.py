@@ -96,11 +96,14 @@ class GameScene(Scene):
         self.bossBattleSystem = engine.BossBattleSystem()
         self.bossPhysicsSystem = engine.BossPhysicsSystem()
         self.shopSystem = engine.ShopSystem()
+        self.projectileSystem = engine.ProjectileSystem()
+        self.enemyAttackSystem = engine.EnemyAttackSystem()
         # Configura las capas con sus respectivas imágenes y factores de parallax
         self.background = engine.ParallaxBackground(globals.world.background, utils.SCREEN_SIZE)
         self.foreground = engine.ParallaxForeground(globals.world.foreground, utils.SCREEN_SIZE)
         self.player = globals.player1
         self.npc = globals.world.npc
+        
 
     def onEnter(self):
         globals.soundManager.playMusicFade('down')
@@ -140,6 +143,9 @@ class GameScene(Scene):
         self.animationSystem.update()
         self.powerUpSystem.update()
         self.shopSystem.update(self.npc, self.player)
+        self.projectileSystem.update()
+        self.enemyAttackSystem.update()
+
         
     def draw(self, sm, screen):
         self.background.draw(screen)

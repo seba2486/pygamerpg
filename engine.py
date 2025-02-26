@@ -21,6 +21,47 @@ class System():
     def updateEntity(self, screen, inputStream, entity):
         pass
 
+class EnemyAttackSystem(System):
+    def check(self, entity):
+        # Filtrar solo a los enemigos que pueden atacar
+        return entity is not None and entity.type == "devil"
+
+    def update(self, screen=None, inputStream=None):
+        # Iteramos sobre una copia de la lista para evitar modificarla durante el recorrido
+        for enemy in list(globals.world.entities):
+            if self.check(enemy):
+                self.updateEntity(screen, inputStream, enemy)
+
+    def updateEntity(self, screen, inputStream, enemy):
+        # Si el enemigo está caminando, evaluamos si debe atacar
+        if enemy.state == 'walking':
+            # Con una probabilidad pequeña (por ejemplo, 1% por frame) decide atacar
+            if random.random() < 0.01:
+                enemy.state = 'idle'
+                #enemy.speed = 0  # Detener su movimiento
+                # Crear el proyectil
+                projectile = utils.makeProjectile(
+                    enemy.position.rect.x,
+                    enemy.position.rect.y - 13,
+                    enemy.direction,  # Puedes ajustar según la dirección del enemigo
+                    speed=4,
+                    damage=enemy.impact_power,
+                    lifetime=120,  # Por ejemplo, 120 frames de vida
+                    owner=enemy
+                )
+                globals.world.projectiles.append(projectile)
+                # Establecer un temporizador de ataque para mantener el estado "idle"
+                enemy.attack_cooldown = 60  # 60 frames (1 segundo a 60 fps)
+
+        # Si el enemigo está en estado "idle", decrementamos el temporizador
+        elif enemy.state == 'idle' and enemy.attack_cooldown > 0:
+            enemy.attack_cooldown -= 1
+            if enemy.attack_cooldown <= 0:
+                enemy.state = 'walking'
+                # Asigna aleatoriamente una dirección y restablece la velocidad
+                enemy.direction = random.choice(["left", "right"])
+                enemy.speed = utils.enemies_speed[enemy.type]
+
 class BossEnemySystem(System):
     def check(self, entity):
         return isinstance(entity, BossEnemy)
@@ -84,7 +125,7 @@ class TrackingEnemySystem(System):
                 entity.last_hit_time = now
                 if entity.animations:
                     entity.animations.alpha = 50
-                entity.last_hit_time = now
+                #entity.last_hit_time = now
 
     def move_towards(self, entity, target_x, target_y):
         if entity.position.rect.x < target_x:
@@ -268,7 +309,7 @@ class PhysicsSystem(System):
             platform_rect = platform.position.rect  # Unpack the tuple to get the rect
             if platform_rect.colliderect(new_y_rect):
                 y_collision = True
-                entity.speed = 2
+                #entity.speed = 2
                 # Adjust to the top of the platform when falling
                 if platform_rect.top > new_y:
                     entity.position.rect.y = platform_rect.top - entity.position.rect.height
@@ -285,6 +326,7 @@ class PhysicsSystem(System):
             entity.position.rect.top = 0
         elif entity.position.rect.bottom > globals.WORLD_HEIGHT:
             entity.position.rect.bottom = globals.WORLD_HEIGHT
+
 
         # Manejo de movimiento aleatorio para entidades enemies
         if entity.type in utils.enemies_types and entity.state=='walking': 
@@ -450,9 +492,30 @@ class InputSystem(System):
                 entity.hitbox = pygame.Rect(entity.position.rect.x - 10, entity.position.rect.y + 10, 10, 20)
             else:    
                 entity.hitbox = pygame.Rect(entity.position.rect.x + 40, entity.position.rect.y + 10, 10, 20) 
+
+            # Disparo al presionar la tecla espacio
+            if inputStream.keyboard.isKeyPressed(pygame.K_SPACE):
+                current_time = pygame.time.get_ticks()
+                if current_time - entity.last_shot_time >= entity.shoot_cooldown:
+                    # Crear y agregar el proyectil
+                    projectile = utils.makeProjectile(
+                        entity.position.rect.x, 
+                        entity.position.rect.y, 
+                        entity.direction,   # o según la dirección del jugador
+                        speed=5, 
+                        damage=10,
+                        lifetime=120
+                    )
+                    globals.world.projectiles.append(projectile)
+                    
+                    # Actualizar el tiempo del último disparo
+                    entity.last_shot_time = current_time
+
         else:
             entity.intention.attack = False
             entity.hitbox = pygame.Rect(0, 0, 0, 0)
+            if entity.last_shot_time > 0:
+                entity.last_shot_time -= 1
 
 class CollectionSystem (System):
     def check(self, entity):
@@ -525,7 +588,7 @@ class BattleSystem(System):
                 if otherEntity.state == 'hit' and otherEntity.cooldown > 0:
                     otherEntity.cooldown -= 1
                 else:
-                    otherEntity.state = 'walking'
+                    #otherEntity.state = 'walking'
                     otherEntity.cooldown = 50
 
                 if entity.intention.attack and utils.center_collide(entity.hitbox, otherEntity.position.rect, threshold):
@@ -549,7 +612,10 @@ class BattleSystem(System):
                             utils.enable_movement(otherEntity, otherEntity.position.rect.x + 40, otherEntity.position.rect.y - 15)
                         else:
                             utils.enable_movement(otherEntity, otherEntity.position.rect.x - 40, otherEntity.position.rect.y - 15)
- 
+            
+            # Player impacta enemigo estandar con projectile
+            self.projectile_impact(otherEntity, entity, globals.world.entities)
+
             #Player colisiona con Spike            
             if otherEntity is not entity and otherEntity.type == 'spike':
                 now = pygame.time.get_ticks()
@@ -630,10 +696,42 @@ class BattleSystem(System):
                         else:
                             utils.enable_movement(otherEntity, otherEntity.position.rect.x - 40, otherEntity.position.rect.y - 15)
                     otherEntity.state = 'hit'
-                
+
+            # Player impacta enemigo tracking con projectile
+            self.projectile_impact(otherEntity, entity, globals.world.trackingEnemies)
+
             if now - entity.last_hit_time > entity.cooldown:
                 if entity.animations:
                     entity.animations.alpha = 255
+
+    # Impacto de proyectiles en enemigos
+    def projectile_impact(self, otherEntity, entity, impactedList):
+        # Impactos de projectiles en enemigos estandar
+        for projectile in globals.world.projectiles:
+            if otherEntity.type in utils.enemies_types:
+                if projectile.position.rect.colliderect(otherEntity.position.rect) and projectile.owner != otherEntity:
+                    globals.soundManager.playSound('enemy_takes_damage')
+                    otherEntity.state = 'hit'
+                    entity.hitbox = pygame.Rect(0, 0, 0, 0)
+                    otherEntity.battle.energy -= entity.impact_power
+
+                    if otherEntity.battle.energy == 0:
+                        otherEntity.active = False
+                        if entity.direction == 'left':   
+                            pu_pos_x = otherEntity.position.rect.x
+                        else:
+                            pu_pos_x = otherEntity.position.rect.x + 15
+                        pu_pos_y = otherEntity.position.rect.y - 15
+                        BattleSystem.power_up_drop (otherEntity, pu_pos_x, pu_pos_y)
+                        impactedList.remove(otherEntity)
+                    else:
+                        if entity.direction == "right":
+                            utils.enable_movement(otherEntity, otherEntity.position.rect.x + 40, otherEntity.position.rect.y - 15)
+                        else:
+                            utils.enable_movement(otherEntity, otherEntity.position.rect.x - 40, otherEntity.position.rect.y - 15)
+                    # Remover el proyectil una vez que impacta
+                    if projectile in globals.world.projectiles:
+                        globals.world.projectiles.remove(projectile)
 
 class BossBattleSystem():
     def check(self, entity):
@@ -723,6 +821,7 @@ class BossBattleSystem():
                         player.animations.alpha = 50
                     player.last_hit_time = now
                 
+        # Player impacta boss       
         if player.intention.attack and utils.center_collide(player.hitbox, boss.position.rect, threshold):
         #if entity.hitbox.colliderect(otherEntity.position.rect):
             globals.soundManager.playSound('enemy_takes_damage')
@@ -747,6 +846,34 @@ class BossBattleSystem():
                 else:
                     utils.enable_movement(boss, boss.position.rect.x - 40, boss.position.rect.y - 15)
                 
+        # Player impacta boss con projectile
+        for projectile in globals.world.projectiles:
+            if projectile.position.rect.colliderect(boss.position.rect):
+                globals.soundManager.playSound('enemy_takes_damage')
+                boss.state = 'hit'
+                player.hitbox = pygame.Rect(0, 0, 0, 0)
+                boss.battle.energy -= player.impact_power
+
+                if boss.battle.energy == 0:
+                    boss.active = False
+                    if player.direction == 'left':   
+                        pu_pos_x = boss.position.rect.x
+                    else:
+                        pu_pos_x = boss.position.rect.x + 15
+                    pu_pos_y = boss.position.rect.y - 15
+                    BattleSystem.power_up_drop (boss, pu_pos_x, pu_pos_y)
+                    globals.world.boss = None
+                else:
+                    if entity.direction == "right":
+                        utils.enable_movement(boss, boss.position.rect.x + 40, boss.position.rect.y - 15)
+                    else:
+                        utils.enable_movement(boss, boss.position.rect.x - 40, boss.position.rect.y - 15)
+
+                # Remover el proyectil una vez que impacta
+                if projectile in globals.world.projectiles:
+                    globals.world.projectiles.remove(projectile)
+        
+        
         if now - player.last_hit_time > player.cooldown:
             if player.animations:
                 player.animations.alpha = 255
@@ -845,7 +972,25 @@ class CameraSystem(System):
                     scaled_image = pygame.transform.scale(image, (newPosRect.width, newPosRect.height))
                     screen.blit(scaled_image, newPosRect.topleft)
                     #self.draw_collision_rect(screen, newPosRect, (255, 0, 0))  # Rojo para visibilidad     
-            
+
+             # --- DIBUJO DE LOS PROYECTILES ---
+            for projectile in globals.world.projectiles:
+                # Suponiendo que cada proyectil tiene una animación en el estado 'idle'
+                anim = projectile.animations.animationList.get('idle')
+                if anim:
+                    anim.draw(screen,
+                              projectile.position.rect.x + offsetX,
+                              projectile.position.rect.y + 22 + offsetY,
+                              False,  # flipX
+                              False,  # flipY
+                              entity.camera.zoomLevel,
+                              projectile.animations.alpha)
+                else:
+                    # Si el proyectil tiene una imagen simple
+                    screen.blit(projectile.image,
+                                (projectile.position.rect.x + offsetX,
+                                 projectile.position.rect.y + 22 + offsetY))
+
             #entity HUD - Coins
             if entity.score is not None:
                 screen.blit(utils.coin0,(entity.camera.rect.x + 10 + offsetX,entity.camera.rect.y + 10 + offsetY))
@@ -882,6 +1027,50 @@ class CameraSystem(System):
     def draw_collision_rect(self, screen, rect, color):
         """Dibuja un rectángulo de contorno para depuración de colisiones."""
         pygame.draw.rect(screen, color, rect, 2)  # El último argumento '2' es el grosor del borde
+
+class ProjectileSystem(System):
+    def check(self, entity):
+        # Solo procesamos entidades de tipo 'projectile'
+        return entity is not None and getattr(entity, "type", None) == 'projectile'
+    
+    def update(self, screen=None, inputStream=None):
+        # Suponiendo que tienes una lista dedicada para proyectiles en tu mundo:
+        for projectile in list(globals.world.projectiles):
+            if self.check(projectile):
+                self.updateEntity(screen, inputStream, projectile)
+    
+    def updateEntity(self, screen, inputStream, projectile):
+        # Actualizar posición según la dirección
+        if projectile.direction == "right":
+            projectile.position.rect.x += projectile.speed
+        elif projectile.direction == "left":
+            projectile.position.rect.x -= projectile.speed
+        elif projectile.direction == "up":
+            projectile.position.rect.y -= projectile.speed
+        elif projectile.direction == "down":
+            projectile.position.rect.y += projectile.speed
+        # Si usas vectores de dirección, podrías hacer algo como:
+        # projectile.position.rect.x += projectile.speed * projectile.direction[0]
+        # projectile.position.rect.y += projectile.speed * projectile.direction[1]
+        
+        # Actualizar timer y remover el proyectil si se agota su vida útil
+        projectile.timer -= 1
+        if projectile.timer <= 0:
+            globals.world.projectiles.remove(projectile)
+            return
+
+        # Verificar colisión con plataformas
+        for platform in globals.world.platforms:
+            platform_rect, image, collide = platform  # Suponiendo que la plataforma es una tupla
+            if platform_rect.colliderect(projectile.position.rect):
+                if projectile in globals.world.projectiles:
+                    globals.world.projectiles.remove(projectile)
+                return  # Salir ya que el proyectil ya fue eliminado
+
+        # (Opcional) También puedes verificar si el proyectil sale de los límites del mundo
+        if not globals.world_bounds.colliderect(projectile.position.rect):
+            if projectile in globals.world.projectiles:
+                globals.world.projectiles.remove(projectile)
 
 class ShopSystem():
     def __init__(self):
@@ -1012,9 +1201,13 @@ class Entity():
         self.cooldown = 3000
         self.phase = 1
         self.attack_cooldown = 0
-        self.impact_power = 0 
-        self.effect = None       
-
+        self.impact_power = 0
+        self.defense_power = 0 
+        self.effect = None
+        # Atributos para el disparo
+        self.last_shot_time = 0           # Tiempo del último disparo (inicialmente 0)
+        self.shoot_cooldown = 500         # 500 ms de cooldown entre disparos
+      
 class MovingPlatform():
     
     def __init__(self):
@@ -1146,6 +1339,20 @@ class ShopItem():
         self.price = 0
         self.price_position = (0,0)
 
+class AttackWeapon():
+    def __init__(self):
+        self.position = None
+        self.power = 0
+        self.price = 0
+        self.cooldown = 0
+        self.hitbox = pygame.Rect(0, 0, 0, 0)
+
+class DefenseWeapon():
+    def __init__(self):
+        self.position = None
+        self.power = 0
+        self.price = 0
+
 class Player(Entity):
     def __init__(self):
         super().__init__()
@@ -1155,3 +1362,18 @@ class Player(Entity):
         self.shield = False
         self.armor = False
 
+class Projectile(Entity):
+    def __init__(self, x, y, width, height, direction, speed, damage, lifetime, image, owner):
+        super().__init__()
+        self.position = Position(x, y, width, height)
+        self.direction = direction  # Por ejemplo, "right", "left", "up", "down" o incluso un vector (dx, dy)
+        self.speed = speed
+        self.damage = damage
+        self.lifetime = lifetime  # En frames o milisegundos
+        self.timer = lifetime
+        self.type = 'projectile'
+        self.state = 'flying'
+        self.image = image
+        self.owner = owner
+        # Aquí puedes asignar una animación o imagen, por ejemplo:
+        # self.animations.add('idle', Animation([tu_imagen_del_proyectil]))

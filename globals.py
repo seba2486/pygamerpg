@@ -1,3 +1,5 @@
+import pygame
+
 world = None
 
 DARK_GREY = (50,50,50)
@@ -13,3 +15,5 @@ TILE_SIZE = 16
 player1 = None
 
 soundManager = None
+
+world_bounds = pygame.Rect(0, 0, WORLD_WIDTH, WORLD_HEIGHT)
