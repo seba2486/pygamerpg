@@ -506,6 +506,7 @@ class InputSystem(System):
                         damage=10,
                         lifetime=120
                     )
+                    projectile.owner = entity
                     globals.world.projectiles.append(projectile)
                     
                     # Actualizar el tiempo del último disparo
@@ -585,11 +586,13 @@ class BattleSystem(System):
                                 entity.animations.alpha = 50
                             entity.last_hit_time = now
                 
+                # Si el enemigo esta en estado 'hit' y su cooldown es mayor a 0, decrementar el cooldown vuelve a caminar si no acaba de disparar
                 if otherEntity.state == 'hit' and otherEntity.cooldown > 0:
                     otherEntity.cooldown -= 1
                 else:
-                    #otherEntity.state = 'walking'
-                    otherEntity.cooldown = 50
+                    if otherEntity.cooldown <= 0:    
+                        otherEntity.state = 'walking'
+                        otherEntity.cooldown = 50
 
                 if entity.intention.attack and utils.center_collide(entity.hitbox, otherEntity.position.rect, threshold):
                 #if entity.hitbox.colliderect(otherEntity.position.rect):
@@ -613,6 +616,10 @@ class BattleSystem(System):
                         else:
                             utils.enable_movement(otherEntity, otherEntity.position.rect.x - 40, otherEntity.position.rect.y - 15)
             
+            
+            # Player es impactado por projectile enemigo
+            self.projectile_impact_player(entity)
+
             # Player impacta enemigo estandar con projectile
             self.projectile_impact(otherEntity, entity, globals.world.entities)
 
@@ -732,6 +739,45 @@ class BattleSystem(System):
                     # Remover el proyectil una vez que impacta
                     if projectile in globals.world.projectiles:
                         globals.world.projectiles.remove(projectile)
+
+    # Impacto de proyectiles en enemigos en player
+    def projectile_impact_player(self, entity):
+        # Impactos de projectiles en enemigos estandar
+        for projectile in globals.world.projectiles:
+            now = pygame.time.get_ticks()
+            if projectile.position.rect.colliderect(entity.position.rect) and projectile.owner != entity:
+                invisible = False
+                if entity.effect != None:
+                    if entity.effect.type == 'invisible':
+                        invisible = True
+                # Si colisiona, el player esta en idle y el shield esta en la direccion opuesta del enemy, el enemy rebota
+                if entity.shield and entity.state == 'idle' and entity.direction != projectile.direction:
+
+                    if entity.direction == "right":
+                        utils.enable_movement(projectile, entity.position.rect.x + 40, entity.position.rect.y - 15)
+                    else:
+                        utils.enable_movement(projectile, entity.position.rect.x - 40, entity.position.rect.y - 15)
+
+                else:
+                    if now - entity.last_hit_time > entity.cooldown and not invisible:
+                        globals.soundManager.playSound('player_receive_damage')
+                        entity.battle.energy -= projectile.damage
+
+                        if entity.direction == "right":
+                            utils.enable_movement(entity, entity.position.rect.x + 30, entity.position.rect.y - 15)
+                        else:
+                            utils.enable_movement(entity, entity.position.rect.x - 30, entity.position.rect.y - 15)
+
+                        entity.speed = 2
+                        entity.last_hit_time = now
+
+                        if entity.animations:
+                            entity.animations.alpha = 50
+                        entity.last_hit_time = now
+
+                # Remover el proyectil una vez que impacta
+                if projectile in globals.world.projectiles:
+                    globals.world.projectiles.remove(projectile)
 
 class BossBattleSystem():
     def check(self, entity):
