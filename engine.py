@@ -21,6 +21,28 @@ class System():
     def updateEntity(self, screen, inputStream, entity):
         pass
 
+class PlayerAttackSystem(System):
+    def check(self, entity):
+        # Filtrar solo a los enemigos que pueden atacar
+        return entity is not None and entity.intention is not None and entity.intention.attack
+
+    def update(self, screen=None, inputStream=None):
+        if self.check(globals.player1):
+            self.updateEntity(screen, inputStream, globals.player1)
+
+    def updateEntity(self, screen, inputStream, player):
+        self.attack(player, inputStream)
+
+    def attack(self, player, inputStream):
+        current_time = pygame.time.get_ticks()
+        if current_time - player.last_attack_time >= player.attack_weapon.cooldown:
+            player.attack_weapon.attack(player)            
+            # Actualizar el tiempo del último disparo
+            player.last_attack_time = current_time
+
+        if player.last_attack_time > 0:
+            player.last_attack_time -= 1
+
 class EnemyAttackSystem(System):
     def check(self, entity):
         # Filtrar solo a los enemigos que pueden atacar
@@ -263,7 +285,7 @@ class PhysicsSystem(System):
                 globals.soundManager.playSound('jump')
                 entity.state = 'jump'
                 entity.speed = -5
-            if entity.intention.attack:
+            if entity.intention.attack and entity.attack_weapon.cooldown == 300:
                 globals.soundManager.playSound('sword_swoosh')
                 entity.state = 'attack'
         
@@ -488,35 +510,8 @@ class InputSystem(System):
 
         if inputStream.keyboard.isKeyDown(entity.input.attack):
             entity.intention.attack = True
-            if entity.direction == 'left':
-                entity.hitbox = pygame.Rect(entity.position.rect.x - 10, entity.position.rect.y + 10, 10, 20)
-            else:    
-                entity.hitbox = pygame.Rect(entity.position.rect.x + 40, entity.position.rect.y + 10, 10, 20) 
-
-            # Disparo al presionar la tecla espacio
-            if inputStream.keyboard.isKeyPressed(pygame.K_SPACE):
-                current_time = pygame.time.get_ticks()
-                if current_time - entity.last_shot_time >= entity.shoot_cooldown:
-                    # Crear y agregar el proyectil
-                    projectile = utils.makeProjectile(
-                        entity.position.rect.x, 
-                        entity.position.rect.y, 
-                        entity.direction,   # o según la dirección del jugador
-                        speed=5, 
-                        damage=10,
-                        lifetime=120
-                    )
-                    projectile.owner = entity
-                    globals.world.projectiles.append(projectile)
-                    
-                    # Actualizar el tiempo del último disparo
-                    entity.last_shot_time = current_time
-
         else:
             entity.intention.attack = False
-            entity.hitbox = pygame.Rect(0, 0, 0, 0)
-            if entity.last_shot_time > 0:
-                entity.last_shot_time -= 1
 
 class CollectionSystem (System):
     def check(self, entity):
@@ -1036,6 +1031,40 @@ class CameraSystem(System):
                     screen.blit(projectile.image,
                                 (projectile.position.rect.x + offsetX,
                                  projectile.position.rect.y + 22 + offsetY))
+                
+            # #TEST DIBUJO ARMA**********************************************************
+            # if globals.player1.intention.attack and globals.player1.last_attack_time > 0:
+            #     # Actualizar posición del arma según la dirección del jugador
+            #     # Definición del arma (rectángulo rojo)
+            #     weapon_rect = pygame.Rect(0, 0, 20, 3)
+            #     # Offsets para posicionar el arma en función de la dirección del jugador
+            #     weapon_offset = {
+            #         "right": (globals.player1.position.rect.w - 20, 21),  # A la derecha del jugador
+            #         "left": (2, 21)                  # A la izquierda del jugador
+            #     }
+
+            #     offset = weapon_offset[globals.player1.direction]
+            #     weapon_rect.topleft = (globals.player1.position.rect.x + offset[0] + offsetX, globals.player1.position.rect.y + offset[1] + offsetY)
+
+            #     # Dibujo
+            #     pygame.draw.rect(screen, (255, 0, 0), weapon_rect)
+            # else:
+            #     # Actualizar posición del arma según la dirección del jugador
+            #     # Definición del arma (rectángulo rojo)
+            #     weapon_rect = pygame.Rect(0, 0, 3, 20)
+            #     # Offsets para posicionar el arma en función de la dirección del jugador
+            #     weapon_offset = {
+            #         "right": (globals.player1.position.rect.w - 29, 5),  # A la derecha del jugador
+            #         "left": (26, 5)                  # A la izquierda del jugador
+            #     }
+
+            #     offset = weapon_offset[globals.player1.direction]
+            #     weapon_rect.topleft = (globals.player1.position.rect.x + offset[0] + offsetX, globals.player1.position.rect.y + offset[1] + offsetY)
+
+            #     # Dibujo
+            #     pygame.draw.rect(screen, (255, 0, 0), weapon_rect)
+
+            # #**********************************************************************************
 
             #entity HUD - Coins
             if entity.score is not None:
@@ -1246,13 +1275,18 @@ class Entity():
         self.active = True
         self.cooldown = 3000
         self.phase = 1
-        self.attack_cooldown = 0
+        self.last_attack_time = 0
+        self.attack_cooldown = 300
         self.impact_power = 0
         self.defense_power = 0 
         self.effect = None
         # Atributos para el disparo
         self.last_shot_time = 0           # Tiempo del último disparo (inicialmente 0)
         self.shoot_cooldown = 500         # 500 ms de cooldown entre disparos
+        # Armamento de ataque
+        self.attack_weapon = None
+        # Armamento de defensa
+        self.defense_weapon = None
       
 class MovingPlatform():
     
@@ -1392,6 +1426,46 @@ class AttackWeapon():
         self.price = 0
         self.cooldown = 0
         self.hitbox = pygame.Rect(0, 0, 0, 0)
+
+    def attack(self, entity):
+        pass
+
+class AttackWeaponSword():
+    def __init__(self):
+        self.position = None
+        self.power = 0
+        self.price = 0
+        self.cooldown = 300
+        self.hitbox = pygame.Rect(0, 0, 0, 0)
+
+    def attack(self, entity):
+        if entity.intention.attack:
+            if entity.direction == 'left':
+                entity.hitbox = pygame.Rect(entity.position.rect.x - 10, entity.position.rect.y + 10, 10, 20)
+            else:    
+                entity.hitbox = pygame.Rect(entity.position.rect.x + 40, entity.position.rect.y + 10, 10, 20) 
+        else:
+            entity.hitbox = pygame.Rect(0, 0, 0, 0)
+
+class AttackWeaponProjectile():
+    def __init__(self):
+        self.position = None
+        self.power = 0
+        self.price = 0
+        self.cooldown = 500
+        self.hitbox = pygame.Rect(0, 0, 0, 0)
+
+    def attack(self, entity):
+        projectile = utils.makeProjectile(
+            entity.position.rect.x, 
+            entity.position.rect.y, 
+            entity.direction,   # o según la dirección del jugador
+            speed=5, 
+            damage=10,
+            lifetime=120
+        )
+        projectile.owner = entity
+        globals.world.projectiles.append(projectile)
 
 class DefenseWeapon():
     def __init__(self):

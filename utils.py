@@ -86,7 +86,7 @@ coin5 = pygame.image.load('sprites/coins/coin16_05.png')
 
 
 live_image = pygame.image.load('sprites/lives/heart.png')
-
+live_image = pygame.transform.scale(live_image, (20,20))
 
 def setHealth(entity):
     if entity.battle:
@@ -453,9 +453,14 @@ def makePlayer(x, y):
     entity.impact_power = 10
     entity.shield = False
     entity.armor = False
+    # Atack cooldown
+    entity.last_attack_time = 0
+    entity.attack_cooldown = 300
     # Atributos para el disparo
     entity.last_shot_time = 0           # Tiempo del último disparo (inicialmente 0)
     entity.shoot_cooldown = 500         # 500 ms de cooldown entre disparos    
+    # Seteo de arma
+    entity.attack_weapon = engine.AttackWeaponSword()
     return entity
 
 pygame.font.init()
@@ -495,7 +500,6 @@ def center_collide(rect1, rect2, threshold):
 def enable_movement(entity, new_pos_x, new_pos_y):
     new_x = new_pos_x
     new_y = new_pos_y
-    print(new_x)
     # Horizontal movement
     new_x_rect = pygame.Rect(int(new_x), int(entity.position.rect.y), entity.position.rect.width, entity.position.rect.height)
     x_collision = False

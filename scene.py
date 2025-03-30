@@ -98,6 +98,7 @@ class GameScene(Scene):
         self.shopSystem = engine.ShopSystem()
         self.projectileSystem = engine.ProjectileSystem()
         self.enemyAttackSystem = engine.EnemyAttackSystem()
+        self.playerAttackSystem = engine.PlayerAttackSystem()
         # Configura las capas con sus respectivas imágenes y factores de parallax
         self.background = engine.ParallaxBackground(globals.world.background, utils.SCREEN_SIZE)
         self.foreground = engine.ParallaxForeground(globals.world.foreground, utils.SCREEN_SIZE)
@@ -145,6 +146,7 @@ class GameScene(Scene):
         self.shopSystem.update(self.npc, self.player)
         self.projectileSystem.update()
         self.enemyAttackSystem.update()
+        self.playerAttackSystem.update()
 
         
     def draw(self, sm, screen):
