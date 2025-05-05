@@ -311,7 +311,7 @@ def makeBossEnemy(x, y, type):
     entity.animations.add('attack', enemyAttackAnimation)
 
     entity.acceleration = 0.2
-    entity.intention = None
+    entity.intention = engine.Intention()
     entity.type = type
     entity.speed = enemies_speed[type]
     entity.direction = 'right'
@@ -326,6 +326,11 @@ def makeBossEnemy(x, y, type):
     entity.last_hit_time = 0
     entity.aggro_distance = 200  # Distancia a la que el boss detecta al jugador
     entity.impact_power = enemies_power[type]
+    sword = makeAttackWeaponBossSword()
+    projectile = makeAttackWeaponBossProjectile()
+    entity.attack_weapons.append(sword)
+    entity.attack_weapons.append(projectile)
+    entity.attack_weapon = sword
 
     return entity
 
@@ -413,8 +418,8 @@ player_animations = {
 def resetPlayer(entity):
     entity.score.score = 0
     entity.battle = engine.Battle(100,100)
-    entity.position.rect.x = 100
-    entity.position.rect.y = 600
+    entity.position.rect.x = 500
+    entity.position.rect.y = 100
     entity.speed = 2
     entity.acceleration = 0.2
     #entity.camera.setWorldPos(300,0)
@@ -432,6 +437,8 @@ def resetPlayer(entity):
     entity.animations.add('walking', entityWalkingAnimation)
     entity.animations.add('jump', entityJumpAnimation)
     entity.animations.add('attack', entityAttackAnimation)
+    entity.attack_weapon = makeAttackWeaponSword()
+
 
 def makePlayer(x, y):
     entity = engine.Player()
@@ -460,7 +467,7 @@ def makePlayer(x, y):
     entity.last_shot_time = 0           # Tiempo del último disparo (inicialmente 0)
     entity.shoot_cooldown = 500         # 500 ms de cooldown entre disparos    
     # Seteo de arma
-    entity.attack_weapon = engine.AttackWeaponSword()
+    entity.attack_weapon = makeAttackWeaponSword()
     return entity
 
 pygame.font.init()
@@ -620,3 +627,58 @@ def makeProjectile(x, y, direction, speed, damage, lifetime=60, owner=None):
     # Si tienes animaciones específicas para proyectiles, las puedes agregar aquí:
     # projectile.animations.add('idle', Animation([tu_imagen_del_proyectil]))
     return projectile
+
+# Weapon parameters
+attackWeaponSwordParams = {
+    'name' : 'sword',
+    'position' : None,
+    'power' : 10,
+    'price' : 20,
+    'cooldown' : 300,
+}
+
+def makeAttackWeaponSword():
+    attackWeaponSword = engine.AttackWeaponSword(attackWeaponSwordParams['name'], attackWeaponSwordParams['position'], attackWeaponSwordParams['power'], attackWeaponSwordParams['price'], attackWeaponSwordParams['cooldown'])
+    return attackWeaponSword
+
+attackWeaponBossSwordParams = {
+    'name' : 'bossSword',
+    'position' : None,
+    'power' : 20,
+    'price' : 20,
+    'cooldown' : 300,
+}
+
+def makeAttackWeaponBossSword():
+    attackWeaponSword = engine.AttackWeaponBossSword(attackWeaponBossSwordParams['name'], attackWeaponBossSwordParams['position'], attackWeaponBossSwordParams['power'], attackWeaponBossSwordParams['price'], attackWeaponBossSwordParams['cooldown'])
+    return attackWeaponSword
+
+attackWeaponProjectileParams = {
+    'name' : 'projectile',
+    'position' : None,
+    'power' : 5,
+    'price' : 20,
+    'cooldown' : 300,
+}
+
+def makeAttackWeaponProjectile():
+    attackWeaponProjectile = engine.AttackWeaponProjectile(attackWeaponBossProjectileParams['name'], attackWeaponProjectileParams['position'], attackWeaponProjectileParams['power'], attackWeaponProjectileParams['price'], attackWeaponProjectileParams['cooldown'])
+    return attackWeaponProjectile
+
+attackWeaponBossProjectileParams = {
+    'name' : 'bossProjectile',
+    'position' : None,
+    'power' : 5,
+    'price' : 20,
+    'cooldown' : 300,
+}
+
+def makeAttackWeaponBossProjectile():
+    attackWeaponBossProjectile = engine.AttackWeaponBossProjectile(attackWeaponBossProjectileParams['name'], attackWeaponBossProjectileParams['position'], attackWeaponBossProjectileParams['power'], attackWeaponBossProjectileParams['price'], attackWeaponBossProjectileParams['cooldown'])
+    return attackWeaponBossProjectile
+
+weaponsParams = {'sword': attackWeaponBossSwordParams, 
+                 'projectile': attackWeaponProjectileParams, 
+                 'bossSword': attackWeaponBossSwordParams, 
+                 'bossProjectile': attackWeaponBossProjectileParams
+                 }

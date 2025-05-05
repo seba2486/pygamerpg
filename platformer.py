@@ -24,7 +24,7 @@ player_on_ground = True
 
 globals.soundManager = soundmanager.SoundManager()
 
-#Create Player
+#Create Playerd  d
 globals.player1 = utils.makePlayer(100, 600)
 globals.player1.camera = engine.Camera(0,800,800,600,2000,800)
 globals.player1.camera.entityToTrack = globals.player1
@@ -40,6 +40,7 @@ running = True
 
 #************************** Game Loop *****************************
 while running:
+
     
     inputStream.processInput()
     globals.soundManager.update()

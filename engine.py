@@ -84,12 +84,34 @@ class EnemyAttackSystem(System):
                 enemy.direction = random.choice(["left", "right"])
                 enemy.speed = utils.enemies_speed[enemy.type]
 
-class BossEnemySystem(System):
+class BossAttackSystem(System):
     def check(self, entity):
-        return isinstance(entity, BossEnemy)
+        return isinstance(entity, BossEnemy) and entity.state == 'walking'
+
+    def update(self, screen=None, inputStream = None):
+        if self.check(globals.world.boss):
+            self.updateEntity(screen, inputStream, globals.world.boss)
     
+    #Agregar seleccion de ataque
     def updateEntity(self, screen, inputStream, entity):
-        entity.update(globals.player1)
+        if entity.attack_weapon.cooldown > 0:
+            entity.attack_weapon.cooldown -= 1
+            if entity.attack_weapon.cooldown < 200:
+                entity.state = 'walking'
+                entity.intention.attack = False
+        else:
+            print('attack')
+            if entity.is_player_within_aggro_distance(globals.player1):
+                entity.intention.attack = True
+                entity.state = 'attack'
+                if entity.attack_weapon.cooldown == 0:
+                    entity.attack_weapon = random.choice(entity.attack_weapons)
+                    entity.attack_weapon.cooldown = utils.weaponsParams[entity.attack_weapon.name]['cooldown']              
+                entity.attack_weapon.attack(entity)
+                entity.attack_cooldown = entity.attack_weapon.cooldown
+
+
+
 
 class TrackingEnemySystem(System):
     def check(self, entity):
@@ -443,7 +465,7 @@ class BossPhysicsSystem():
             platform_rect, _, collide = platform  # Unpack the tuple to get the rect
             if platform_rect.colliderect(new_y_rect) and collide:
                 y_collision = True
-                entity.speed = 2
+                entity.speed = utils.enemies_speed['boss']
                 # Adjust to the top of the platform when falling
                 if platform_rect.top > new_y:
                     entity.position.rect.y = platform_rect.top - entity.position.rect.height
@@ -455,7 +477,7 @@ class BossPhysicsSystem():
             platform_rect = platform.position.rect  # Unpack the tuple to get the rect
             if platform_rect.colliderect(new_y_rect):
                 y_collision = True
-                entity.speed = 2
+                entity.speed = utils.enemies_speed['boss']
                 # Adjust to the top of the platform when falling
                 if platform_rect.top > new_y:
                     entity.position.rect.y = platform_rect.top - entity.position.rect.height
@@ -735,7 +757,7 @@ class BattleSystem(System):
                     if projectile in globals.world.projectiles:
                         globals.world.projectiles.remove(projectile)
 
-    # Impacto de proyectiles en enemigos en player
+    # Impacto de proyectiles de enemigos en player
     def projectile_impact_player(self, entity):
         # Impactos de projectiles en enemigos estandar
         for projectile in globals.world.projectiles:
@@ -774,6 +796,7 @@ class BattleSystem(System):
                 if projectile in globals.world.projectiles:
                     globals.world.projectiles.remove(projectile)
 
+# Actualizar el sistema de batalla del jefe para que funcione con el nuevo sistema de batalla
 class BossBattleSystem():
     def check(self, entity):
         return entity is not None and entity.battle is not None
@@ -789,31 +812,26 @@ class BossBattleSystem():
 
         player = globals.player1
         boss = globals.world.boss
-        boss_attack = False
+        #boss_attack = False
 
-        if boss.last_hit_time == 0:
+        if boss.last_hit_time <= 0:
             boss.invulnerable = False
-            if boss.attack_cooldown > 0:
-                boss.attack_cooldown -= 1
-                if boss.attack_cooldown < 200:
-                    boss.state = 'walking'
-            else:
-                boss_attack = True
+            boss.state = 'walking'
         else:
             if boss.last_hit_time > 0:
                 boss.last_hit_time -= 1
                 boss.state = 'hit'
+                boss.invulnerable = True
 
         # Player colisiona con Boss
         threshold = 5  # Ajustar este valor según sea necesario
         now = pygame.time.get_ticks()
         
-        if boss_attack:
-            boss.state = 'attack'
-            attack_range = 50  # Rango del ataque cuerpo a cuerpo
-            attack_rect = pygame.Rect(boss.position.rect.x - attack_range // 2, boss.position.rect.y - attack_range // 2, 
-                                    boss.position.rect.width + attack_range, boss.position.rect.height + attack_range)
-            if attack_rect.colliderect(player.position.rect):
+
+        #Refrescar el tipo de arma para ver si es distancia o melee
+        if boss.state == 'attack':
+
+            if  boss.attack_weapon.hitbox.colliderect(player.position.rect) and boss.attack_weapon.cooldown == 300:
                 print("Boss melee attack hit the player!")
                 invisible = False
                 if player.effect != None:
@@ -831,10 +849,8 @@ class BossBattleSystem():
                     player.last_hit_time = now
                     if player.animations:
                         player.animations.alpha = 50
-                    player.last_hit_time = now
 
-            boss.attack_cooldown = 300  # Reinicia el cooldown del ataque
-
+ 
         if utils.center_collide(player.position.rect, boss.position.rect, threshold):
         #if player.position.rect.colliderect(boss.position.rect):                    
             invisible = False
@@ -860,40 +876,17 @@ class BossBattleSystem():
                     player.last_hit_time = now
                     if player.animations:
                         player.animations.alpha = 50
-                    player.last_hit_time = now
-                
-        # Player impacta boss       
-        if player.intention.attack and utils.center_collide(player.hitbox, boss.position.rect, threshold):
-        #if entity.hitbox.colliderect(otherEntity.position.rect):
-            globals.soundManager.playSound('enemy_takes_damage')
-            boss.state = 'hit'
-            player.hitbox = pygame.Rect(0, 0, 0, 0)
-            boss.take_damage(player.impact_power)
-
-            print('boss ener', boss.battle.energy)
-
-            if boss.battle.energy == 0:
-                boss.active = False
-                if player.direction == 'left':   
-                    pu_pos_x = boss.position.rect.x
-                else:
-                    pu_pos_x = boss.position.rect.x + 15
-                pu_pos_y = boss.position.rect.y - 15
-                BattleSystem.power_up_drop (boss, pu_pos_x, pu_pos_y)
-                globals.world.boss = None
-            else:
-                if player.direction == "right":
-                    utils.enable_movement(boss, boss.position.rect.x + 40, boss.position.rect.y - 15)
-                else:
-                    utils.enable_movement(boss, boss.position.rect.x - 40, boss.position.rect.y - 15)
-                
-        # Player impacta boss con projectile
-        for projectile in globals.world.projectiles:
-            if projectile.position.rect.colliderect(boss.position.rect):
+        
+        if boss.invulnerable == False:     
+            # Player impacta boss       
+            if boss.invulnerable == False and player.intention.attack and utils.center_collide(player.attack_weapon.hitbox, boss.position.rect, threshold):
+            #if entity.hitbox.colliderect(otherEntity.position.rect):
                 globals.soundManager.playSound('enemy_takes_damage')
-                boss.state = 'hit'
                 player.hitbox = pygame.Rect(0, 0, 0, 0)
-                boss.battle.energy -= player.impact_power
+                boss.take_damage(player.attack_weapon.power)
+                print('sword power', player.attack_weapon.power)
+
+                print('boss ener', boss.battle.energy)
 
                 if boss.battle.energy == 0:
                     boss.active = False
@@ -905,14 +898,40 @@ class BossBattleSystem():
                     BattleSystem.power_up_drop (boss, pu_pos_x, pu_pos_y)
                     globals.world.boss = None
                 else:
-                    if entity.direction == "right":
+                    boss.last_hit_time = 100
+                    boss.state = 'hit'
+                    if player.direction == "right":
                         utils.enable_movement(boss, boss.position.rect.x + 40, boss.position.rect.y - 15)
                     else:
                         utils.enable_movement(boss, boss.position.rect.x - 40, boss.position.rect.y - 15)
+                    
+            # Player impacta boss con projectile
+            for projectile in globals.world.projectiles:
+                if projectile.owner != boss and projectile.position.rect.colliderect(boss.position.rect):
+                    globals.soundManager.playSound('enemy_takes_damage')
+                    player.hitbox = pygame.Rect(0, 0, 0, 0)
+                    boss.take_damage(player.attack_weapon.power)
 
-                # Remover el proyectil una vez que impacta
-                if projectile in globals.world.projectiles:
-                    globals.world.projectiles.remove(projectile)
+                    if boss.battle.energy == 0:
+                        boss.active = False
+                        if player.direction == 'left':   
+                            pu_pos_x = boss.position.rect.x
+                        else:
+                            pu_pos_x = boss.position.rect.x + 15
+                        pu_pos_y = boss.position.rect.y - 15
+                        BattleSystem.power_up_drop (boss, pu_pos_x, pu_pos_y)
+                        globals.world.boss = None
+                    else:
+                        boss.last_hit_time = 100
+                        boss.state = 'hit'
+                        if player.direction == "right":
+                            utils.enable_movement(boss, boss.position.rect.x + 40, boss.position.rect.y - 15)
+                        else:
+                            utils.enable_movement(boss, boss.position.rect.x - 40, boss.position.rect.y - 15)
+
+                    # Remover el proyectil una vez que impacta
+                    if projectile in globals.world.projectiles:
+                        globals.world.projectiles.remove(projectile)
         
         
         if now - player.last_hit_time > player.cooldown:
@@ -988,6 +1007,10 @@ class CameraSystem(System):
                         entity.camera.zoomLevel,
                         e.animations.alpha
                 )
+                # Test Boss Sword
+                # weapon_rect = pygame.Rect(e.attack_weapon.hitbox.x + offsetX, e.attack_weapon.hitbox.y + offsetY, e.attack_weapon.hitbox.width, e.attack_weapon.hitbox.height)
+                # pygame.draw.rect(screen, (255, 0, 0), weapon_rect)
+
 
             #Render MovingPlatforms
             for e in globals.world.movingPlatforms:
@@ -1065,7 +1088,7 @@ class CameraSystem(System):
             #     pygame.draw.rect(screen, (255, 0, 0), weapon_rect)
 
             # #**********************************************************************************
-
+            
             #entity HUD - Coins
             if entity.score is not None:
                 screen.blit(utils.coin0,(entity.camera.rect.x + 10 + offsetX,entity.camera.rect.y + 10 + offsetY))
@@ -1394,6 +1417,7 @@ class BossEnemy(Entity):
 
     def __init__(self):
         super().__init__()
+        self.attack_weapons = []
         
     def is_player_within_aggro_distance(self, player):
         distance = (abs(self.position.rect.x - player.position.rect.x) ** 2 + 
@@ -1421,6 +1445,7 @@ class ShopItem():
 
 class AttackWeapon():
     def __init__(self):
+        self.name = ''
         self.position = None
         self.power = 0
         self.price = 0
@@ -1431,28 +1456,30 @@ class AttackWeapon():
         pass
 
 class AttackWeaponSword():
-    def __init__(self):
-        self.position = None
-        self.power = 0
-        self.price = 0
-        self.cooldown = 300
+    def __init__(self, name='', position=None, power=0, price=0, cooldown=300):
+        self.name = name
+        self.position = position
+        self.power = power
+        self.price = price
+        self.cooldown = cooldown
         self.hitbox = pygame.Rect(0, 0, 0, 0)
 
     def attack(self, entity):
         if entity.intention.attack:
             if entity.direction == 'left':
-                entity.hitbox = pygame.Rect(entity.position.rect.x - 10, entity.position.rect.y + 10, 10, 20)
+                entity.attack_weapon.hitbox = pygame.Rect(entity.position.rect.x - 10, entity.position.rect.y + 10, 10, 20)
             else:    
-                entity.hitbox = pygame.Rect(entity.position.rect.x + 40, entity.position.rect.y + 10, 10, 20) 
+                entity.attack_weapon.hitbox = pygame.Rect(entity.position.rect.x + 40, entity.position.rect.y + 10, 10, 20) 
         else:
-            entity.hitbox = pygame.Rect(0, 0, 0, 0)
+            entity.attack_weapon.hitbox = pygame.Rect(0, 0, 0, 0)
 
 class AttackWeaponProjectile():
-    def __init__(self):
-        self.position = None
-        self.power = 0
-        self.price = 0
-        self.cooldown = 500
+    def __init__(self, name='', position=None, power=0, price=0, cooldown=300):
+        self.name = name
+        self.position = position
+        self.power = power
+        self.price = price
+        self.cooldown = cooldown
         self.hitbox = pygame.Rect(0, 0, 0, 0)
 
     def attack(self, entity):
@@ -1497,3 +1524,50 @@ class Projectile(Entity):
         self.owner = owner
         # Aquí puedes asignar una animación o imagen, por ejemplo:
         # self.animations.add('idle', Animation([tu_imagen_del_proyectil]))
+
+class AttackWeaponBossSword():
+    def __init__(self, name='', position=None, power=0, price=0, cooldown=300):
+        self.name = name
+        self.position = position
+        self.power = power
+        self.price = price
+        self.cooldown = cooldown
+        self.hitbox = pygame.Rect(0, 0, 0, 0)
+
+    def attack(self, entity):
+        if entity.intention.attack:
+            if entity.direction == 'left':
+                entity.attack_weapon.hitbox = pygame.Rect(entity.position.rect.x + 10, entity.position.rect.y + 35, 20, 10)
+            else:    
+                entity.attack_weapon.hitbox = pygame.Rect(entity.position.rect.x + 50, entity.position.rect.y + 35, 20, 10)
+
+        else:
+            entity.attack_weapon.hitbox = pygame.Rect(0, 0, 0, 0)
+
+class AttackWeaponBossProjectile():
+    def __init__(self, name='', position=None, power=0, price=0, cooldown=300):
+        self.name = name
+        self.position = position
+        self.power = power
+        self.price = price
+        self.cooldown = cooldown
+        self.hitbox = pygame.Rect(0, 0, 0, 0)
+
+    def attack(self, entity):
+        
+        if entity.direction == 'left':
+            x = entity.position.rect.x - 20
+        else:
+            x = entity.position.rect.x + 60
+        y = entity.position.rect.y + 22
+        
+        projectile = utils.makeProjectile(
+            x, 
+            y, 
+            entity.direction,   # o según la dirección del jugador
+            speed=5, 
+            damage=10,
+            lifetime=120
+        )
+        projectile.owner = entity
+        globals.world.projectiles.append(projectile)
